@@ -107,8 +107,7 @@ export default function App() {
                   if (loaded.rows.length) {
                     setState(loaded)
                     setSelectedSetId(id)
-                    const found = sets.find((s) => s.id === id)
-                    if (found) setSetName(found.name)
+                    setSetName('')
                   }
                 }}
               >
@@ -121,13 +120,12 @@ export default function App() {
               </select>
               <button
                 type="button"
-                disabled={!sets.some((s) => s.name === setName.trim())}
+                disabled={!selectedSetId}
                 className="border-l border-zinc-200 px-2.5 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-red-700 disabled:opacity-30"
                 onClick={() => {
-                  const found = sets.find((s) => s.name === setName.trim())
-                  if (!found) return
-                  setSets(deleteSet(localSetStore, found.id))
-                  if (selectedSetId === found.id) setSelectedSetId('')
+                  if (!selectedSetId) return
+                  setSets(deleteSet(localSetStore, selectedSetId))
+                  setSelectedSetId('')
                 }}
               >
                 Delete
