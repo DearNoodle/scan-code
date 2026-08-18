@@ -6,6 +6,7 @@ export interface Row {
   data: string
   image: string | null
   error: string | null
+  stale: boolean
 }
 
 export interface SessionState {
@@ -19,6 +20,7 @@ export type SessionEvent =
   | { type: 'CHANGE_TYPE'; id: string; codeType: CodeType }
   | { type: 'CHANGE_DATA'; id: string; data: string }
   | { type: 'GENERATE_ALL' }
+  | { type: 'GENERATE_ONE'; id: string }
 
 export type Encoder = (data: string, codeType: CodeType) => Promise<string>
 
@@ -30,6 +32,7 @@ export function createInitialState(): SessionState {
       data: '',
       image: null,
       error: null,
+      stale: false,
     }]
   }
 }
@@ -49,6 +52,7 @@ export function sessionReducer(
           data: '',
           image: null,
           error: null,
+          stale: false,
         }]
       }
     }
@@ -65,7 +69,7 @@ export function sessionReducer(
       return {
         rows: state.rows.map(r =>
           r.id === event.id
-            ? { ...r, type: event.codeType, image: null, error: null }
+            ? { ...r, type: event.codeType, image: null, error: null, stale: false }
             : r
         )
       }
@@ -74,29 +78,46 @@ export function sessionReducer(
       return {
         rows: state.rows.map(r =>
           r.id === event.id
-            ? { ...r, data: event.data, error: null }
+            ? { ...r, data: event.data, error: null, stale: r.image !== null }
             : r
         )
       }
     }
     case 'GENERATE_ALL': {
       if (!encoder) return state
-      return (async () => {
-        const newRows = await Promise.all(state.rows.map(async (row) => {
-          if (row.data === '') {
-            return { ...row, image: null, error: 'Invalid Code' }
-          }
-          try {
-            const image = await encoder(row.data, row.type)
-            return { ...row, image, error: null }
-          } catch {
-            return { ...row, image: null, error: 'Invalid Code' }
-          }
-        }))
-        return { rows: newRows }
-      })()
+      return encodeRows(state.rows, encoder)
+    }
+    case 'GENERATE_ONE': {
+      if (!encoder) return state
+      return encodeRows(state.rows, encoder, event.id)
     }
     default:
       return state
   }
+}
+
+async function encodeOne(row: Row, encoder: Encoder): Promise<Row> {
+  if (row.data === '') {
+    return { ...row, image: null, error: 'Invalid Code', stale: false }
+  }
+  try {
+    const image = await encoder(row.data, row.type)
+    return { ...row, image, error: null, stale: false }
+  } catch {
+    return { ...row, image: null, error: 'Invalid Code', stale: false }
+  }
+}
+
+async function encodeRows(
+  rows: Row[],
+  encoder: Encoder,
+  onlyId?: string,
+): Promise<SessionState> {
+  const newRows = await Promise.all(
+    rows.map((row) => {
+      if (onlyId && row.id !== onlyId) return row
+      return encodeOne(row, encoder)
+    }),
+  )
+  return { rows: newRows }
 }

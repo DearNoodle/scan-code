@@ -9,6 +9,7 @@ describe('session', () => {
     expect(state.rows[0].data).toBe('')
     expect(state.rows[0].image).toBeNull()
     expect(state.rows[0].error).toBeNull()
+    expect(state.rows[0].stale).toBe(false)
   })
 
   it('add copies last row type, empty data/image/error', () => {
@@ -67,12 +68,14 @@ describe('session', () => {
         data: 'OLD',
         image: 'IMG:OLD',
         error: 'Invalid Code',
+        stale: false,
       }],
     }
     const state1 = sessionReducer(state0, { type: 'CHANGE_DATA', id: 'r1', data: '  ABC  ' }) as SessionState
     expect(state1.rows[0].data).toBe('  ABC  ')
     expect(state1.rows[0].image).toBe('IMG:OLD')
     expect(state1.rows[0].error).toBeNull()
+    expect(state1.rows[0].stale).toBe(true)
   })
 
   it('generate: empty string → Invalid Code, encoder not called', async () => {
@@ -116,5 +119,20 @@ describe('session', () => {
     const state1 = sessionReducer(state0, { type: 'CHANGE_DATA', id, data: '   ' }) as SessionState
     await sessionReducer(state1, { type: 'GENERATE_ALL' }, encoder as Encoder)
     expect(encoder).toHaveBeenCalledWith('   ', '11')
+  })
+
+  it('generate one encodes only that row',
+    async () => {
+    const encoder = vi.fn(async (data) => `IMG:${data}`)
+    const state0 = createInitialState()
+    const id0 = state0.rows[0].id
+    const state1 = sessionReducer(state0, { type: 'CHANGE_DATA', id: id0, data: 'A' }) as SessionState
+    const state2 = sessionReducer(state1, { type: 'ADD_ROW' }) as SessionState
+    const id1 = state2.rows[1].id
+    const state3 = sessionReducer(state2, { type: 'CHANGE_DATA', id: id1, data: 'B' }) as SessionState
+    const state4 = await sessionReducer(state3, { type: 'GENERATE_ONE', id: id0 }, encoder as Encoder) as SessionState
+    expect(state4.rows[0].image).toBe('IMG:A')
+    expect(state4.rows[1].image).toBeNull()
+    expect(encoder).toHaveBeenCalledTimes(1)
   })
 })
