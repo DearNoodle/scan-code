@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createInitialState, sessionReducer, type SessionState, type SessionEvent, type Encoder } from './session'
+import { createInitialState, sessionReducer, type SessionState, type Encoder } from './session'
 
 describe('session', () => {
   it('first state is one empty QR row', () => {
@@ -26,6 +26,17 @@ describe('session', () => {
     const state = createInitialState()
     const result = sessionReducer(state, { type: 'DELETE_ROW', id: state.rows[0].id }) as SessionState
     expect(result.rows).toHaveLength(1)
+  })
+
+  it('deleting a non-last row removes only that row', () => {
+    const state0 = createInitialState()
+    const keepId = state0.rows[0].id
+    const state1 = sessionReducer(state0, { type: 'ADD_ROW' }) as SessionState
+    const dropId = state1.rows[1].id
+    const state2 = sessionReducer(state1, { type: 'ADD_ROW' }) as SessionState
+    const lastId = state2.rows[2].id
+    const state3 = sessionReducer(state2, { type: 'DELETE_ROW', id: dropId }) as SessionState
+    expect(state3.rows.map(r => r.id)).toEqual([keepId, lastId])
   })
 
   it('delete all resets to one empty QR row (new identity)', () => {

@@ -38,9 +38,10 @@ export default function App() {
   return (
     <main className="min-h-svh bg-zinc-50 px-6 py-8 text-zinc-900">
       <h1 className="mb-6 text-3xl font-semibold tracking-tight">Code Label Tool</h1>
-      {state.rows.map((row) => {
+      {state.rows.map((row, index) => {
         const slot = SLOT[row.type]
         const lines = Math.max(3, row.data.split('\n').length)
+        const isLast = index === state.rows.length - 1
         return (
           <article
             key={row.id}
@@ -70,14 +71,27 @@ export default function App() {
                   apply({ type: 'CHANGE_DATA', id: row.id, data: e.target.value })
                 }
               />
-              <button
-                type="button"
-                className="w-8 rounded-md border border-zinc-300 text-lg disabled:opacity-40"
-                disabled={state.rows.length === 1}
-                onClick={() => apply({ type: 'DELETE_ROW', id: row.id })}
-              >
-                ×
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  className="w-8 rounded-md border border-zinc-300 text-lg disabled:opacity-40"
+                  disabled={state.rows.length === 1}
+                  onClick={() => apply({ type: 'DELETE_ROW', id: row.id })}
+                >
+                  ×
+                </button>
+                {isLast ? (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    className="w-8 rounded-md border border-zinc-300 text-lg"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => apply({ type: 'ADD_ROW' })}
+                  >
+                    +
+                  </button>
+                ) : null}
+              </div>
             </div>
             <div
               className="flex shrink-0 items-center justify-center border border-zinc-200 bg-white"
