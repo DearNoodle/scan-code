@@ -4,7 +4,7 @@ import { encode } from './bwip'
 describe('bwip encoder', () => {
   it('returns a data URL for a known-good QR payload', async () => {
     const image = await encode('ABC123', '11')
-    expect(image.startsWith('data:image/svg+xml')).toBe(true)
+    expect(image.startsWith('data:image/')).toBe(true)
     expect(image.length).toBeGreaterThan(40)
   })
 
@@ -19,7 +19,7 @@ describe('bwip encoder', () => {
     ['13', 'DM payload'] as const,
   ])('returns a data URL for type %s', async (type, data) => {
     const image = await encode(data, type)
-    expect(image.startsWith('data:image/svg+xml')).toBe(true)
+    expect(image.startsWith('data:image/')).toBe(true)
     expect(image.length).toBeGreaterThan(40)
   })
 

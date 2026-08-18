@@ -1,4 +1,4 @@
-import { toSVG } from 'bwip-js/browser'
+import { toCanvas, toSVG } from 'bwip-js/browser'
 import type { CodeType, Encoder } from '../session/session'
 
 const BCID: Record<CodeType, string> = {
@@ -9,8 +9,8 @@ const BCID: Record<CodeType, string> = {
   '13': 'datamatrix',
 }
 
-export const encode: Encoder = async (data, codeType) => {
-  const svg = toSVG({
+function renderOpts(data: string, codeType: CodeType) {
+  return {
     bcid: BCID[codeType],
     text: data,
     includetext: false,
@@ -18,6 +18,16 @@ export const encode: Encoder = async (data, codeType) => {
     barcolor: '000000',
     paddingwidth: 10,
     paddingheight: 10,
-  })
+  }
+}
+
+export const encode: Encoder = async (data, codeType) => {
+  const options = renderOpts(data, codeType)
+  if (typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas')
+    toCanvas(canvas, options)
+    return canvas.toDataURL('image/png')
+  }
+  const svg = toSVG(options)
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
