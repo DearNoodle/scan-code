@@ -1,4 +1,4 @@
-import bwipjs from 'bwip-js/node'
+import { toSVG } from 'bwip-js/browser'
 import type { CodeType, Encoder } from '../session/session'
 
 const BCID: Record<CodeType, string> = {
@@ -10,7 +10,7 @@ const BCID: Record<CodeType, string> = {
 }
 
 export const encode: Encoder = async (data, codeType) => {
-  const png = await bwipjs.toBuffer({
+  const svg = toSVG({
     bcid: BCID[codeType],
     text: data,
     includetext: false,
@@ -19,5 +19,5 @@ export const encode: Encoder = async (data, codeType) => {
     paddingwidth: 10,
     paddingheight: 10,
   })
-  return `data:image/png;base64,${png.toString('base64')}`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
