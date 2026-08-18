@@ -26,6 +26,7 @@
   },
   "homepage": "https://github.com/DearNoodle/scan-code#readme",
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.18",
@@ -40,6 +41,7 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
+    "bwip-js": "^4.11.3",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   }

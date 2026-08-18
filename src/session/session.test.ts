@@ -49,10 +49,18 @@ describe('session', () => {
   })
 
   it('data change keeps image, clears error, does not trim', () => {
-    const state0 = createInitialState()
-    const id = state0.rows[0].id
-    const state1 = sessionReducer(state0, { type: 'CHANGE_DATA', id, data: '  ABC  ' }) as SessionState
+    const state0: SessionState = {
+      rows: [{
+        id: 'r1',
+        type: '11',
+        data: 'OLD',
+        image: 'IMG:OLD',
+        error: 'Invalid Code',
+      }],
+    }
+    const state1 = sessionReducer(state0, { type: 'CHANGE_DATA', id: 'r1', data: '  ABC  ' }) as SessionState
     expect(state1.rows[0].data).toBe('  ABC  ')
+    expect(state1.rows[0].image).toBe('IMG:OLD')
     expect(state1.rows[0].error).toBeNull()
   })
 
