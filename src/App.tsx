@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   createInitialState,
   sessionReducer,
@@ -32,6 +32,8 @@ export default function App() {
   const [sets, setSets] = useState<LabelSet[]>(() => localSetStore.load())
   const [setName, setSetName] = useState('')
   const [selectedSetId, setSelectedSetId] = useState('')
+  const [sessionPickerOpen, setSessionPickerOpen] = useState(false)
+  const importInputRef = useRef<HTMLInputElement>(null)
 
   function apply(event: Parameters<typeof sessionReducer>[1]) {
     const next = sessionReducer(state, event, encode)
@@ -62,97 +64,166 @@ export default function App() {
   function persistNamed() {
     const name = setName.trim()
     if (!name) return
-    const next = saveSet(localSetStore, { name, session: state })
+    const next = saveSet(localSetStore, { name, session: state, id: selectedSetId || undefined })
     setSets(next)
-    const saved = next.find((s) => s.name === name)
+    const saved = next.find((s) => s.id === selectedSetId || s.name === name)
     if (saved) setSelectedSetId(saved.id)
+  }
+
+  function selectSession(id: string) {
+    const nextSession = sets.find((set) => set.id === id)
+    if (!nextSession || nextSession.id === selectedSetId) return
+
+    const currentSession = sets.find((set) => set.id === selectedSetId)
+    if (currentSession) {
+      setSets(saveSet(localSetStore, { name: currentSession.name, session: state, id: currentSession.id }))
+    }
+    const loaded = loadSet(localSetStore, nextSession.id)
+    if (loaded.rows.length) {
+      setState(loaded)
+      setSelectedSetId(nextSession.id)
+      setSetName(nextSession.name)
+      setSessionPickerOpen(false)
+    }
+  }
+
+  async function exportSession() {
+    const data = JSON.stringify(state, null, 2)
+    const blob = new Blob([data], { type: 'application/json' })
+
+    const saveFilePicker = (window as Window & {
+      showSaveFilePicker?: (options: {
+        suggestedName: string
+        types: { description: string; accept: Record<string, string[]> }[]
+      }) => Promise<{ createWritable: () => Promise<FileSystemWritableFileStream> }>
+    }).showSaveFilePicker
+
+    if (saveFilePicker) {
+      try {
+        const handle = await saveFilePicker({
+          suggestedName: 'code-label-session.json',
+          types: [{ description: 'JSON session', accept: { 'application/json': ['.json'] } }],
+        })
+        const writable = await handle.createWritable()
+        await writable.write(blob)
+        await writable.close()
+      } catch (error) {
+        if ((error as DOMException).name !== 'AbortError') throw error
+      }
+      return
+    }
+
+    const name = window.prompt('Export file name', 'code-label-session.json')
+    if (!name) return
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = name.endsWith('.json') ? name : `${name}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function importSession(file: File) {
+    void file.text().then((contents) => {
+      const imported = JSON.parse(contents) as SessionState
+      if (!Array.isArray(imported.rows) || !imported.rows.length) throw new Error('Invalid session')
+      setState(imported)
+      setSelectedSetId('')
+      setSetName('')
+    }).catch(() => window.alert('That file does not contain a valid session.'))
   }
 
   return (
     <div className="min-h-svh bg-zinc-100 text-zinc-900">
       <header className="sticky top-0 z-10 border-b border-zinc-200/80 bg-zinc-100/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-2.5 sm:px-6">
-          <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight">Code Label Tool</h1>
-            <p className="text-xs text-zinc-500">Type a payload, generate, scan off the screen.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div className="flex items-stretch overflow-hidden rounded-lg border border-zinc-300 bg-white">
-              <input
-                aria-label="set name"
-                placeholder="Set name"
-                className="w-32 bg-transparent px-2.5 py-1.5 text-sm outline-none focus:bg-zinc-50 sm:w-40"
-                value={setName}
-                onChange={(e) => setSetName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') persistNamed()
-                }}
-              />
-              <button
-                type="button"
-                disabled={!setName.trim()}
-                className="border-l border-zinc-200 px-2.5 text-sm text-zinc-700 hover:bg-zinc-50 disabled:opacity-40"
-                onClick={persistNamed}
-              >
-                Save
-              </button>
-              <select
-                aria-label="saved sets"
-                className="max-w-36 border-l border-zinc-200 bg-transparent py-1.5 pl-2.5 pr-2 text-sm text-zinc-700 outline-none hover:bg-zinc-50"
-                value={selectedSetId}
-                onChange={(e) => {
-                  const id = e.target.value
-                  if (!id) return
-                  const loaded = loadSet(localSetStore, id)
-                  if (loaded.rows.length) {
-                    setState(loaded)
-                    setSelectedSetId(id)
-                    setSetName('')
-                  }
-                }}
-              >
-                <option value="">Load…</option>
-                {sets.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.rows.length})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={!selectedSetId}
-                className="border-l border-zinc-200 px-2.5 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-red-700 disabled:opacity-30"
-                onClick={() => {
-                  if (!selectedSetId) return
-                  setSets(deleteSet(localSetStore, selectedSetId))
-                  setSelectedSetId('')
-                }}
-              >
-                Delete
-              </button>
+        <div className="mx-auto max-w-6xl px-5 py-2 sm:px-8 sm:py-2">
+          <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <div className="min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Code Label Tool</h1>
+              <p className="mt-0.5 text-sm text-zinc-500">Type a payload, generate, scan off the screen.</p>
             </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={busy}
-                className="rounded-lg bg-zinc-900 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50"
-                onClick={() => apply({ type: 'GENERATE_ALL' })}
-              >
+            <div className="flex items-center gap-2">
+              <button type="button" disabled={busy} className="ui-primary rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50" onClick={() => apply({ type: 'GENERATE_ALL' })}>
                 {busy ? 'Generating…' : 'Generate all'}
               </button>
-              <button
-                type="button"
-                className="rounded-lg px-2.5 py-1.5 text-sm text-zinc-500 hover:bg-zinc-200/70 hover:text-zinc-800"
-                onClick={() => apply({ type: 'DELETE_ALL' })}
-              >
+              <button type="button" className="rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50 hover:text-red-700" onClick={() => apply({ type: 'DELETE_ALL' })}>
                 Reset
               </button>
+            </div>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 pt-2">
+            <div className="flex items-center gap-2">
+              <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) importSession(file)
+                e.target.value = ''
+              }} />
+              <button type="button" className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50" onClick={() => importInputRef.current?.click()}>
+                Import
+              </button>
+              <button type="button" className="rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-700 hover:bg-zinc-50" onClick={exportSession}>
+                Export
+              </button>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative flex items-stretch overflow-visible rounded-lg border border-zinc-300 bg-white">
+                <input
+                  aria-label="session name"
+                  placeholder="New session name"
+                  className="w-44 rounded-l-lg bg-transparent px-3 py-2 text-sm outline-none focus:bg-zinc-50 sm:w-56"
+                  value={setName}
+                  onChange={(e) => {
+                    const name = e.target.value
+                    setSetName(name)
+                    if (name !== sets.find((set) => set.id === selectedSetId)?.name) setSelectedSetId('')
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') persistNamed() }}
+                />
+                <button
+                  type="button"
+                  aria-label="clear session name"
+                  title="Clear session name"
+                  className="border-l border-zinc-200 px-2 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"
+                  onClick={() => {
+                    setSetName('')
+                    setSelectedSetId('')
+                    setSessionPickerOpen(false)
+                  }}
+                >
+                  ×
+                </button>
+                <button
+                  type="button"
+                  aria-label="select session"
+                  title="Select session"
+                  className="border-l border-zinc-200 px-2 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-800"
+                  onClick={() => setSessionPickerOpen((open) => !open)}
+                >
+                  ▾
+                </button>
+                {sessionPickerOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-1 max-h-56 min-w-full overflow-y-auto rounded-lg border border-zinc-300 bg-white py-1 shadow-lg">
+                    {sets.length ? sets.map((set) => (
+                      <button key={set.id} type="button" className="block w-full px-3 py-1.5 text-left text-sm text-zinc-700 hover:bg-zinc-50" onClick={() => selectSession(set.id)}>
+                        {set.name} <span className="text-zinc-400">({set.rows.length})</span>
+                      </button>
+                    )) : <span className="block px-3 py-1.5 text-sm text-zinc-400">No saved sessions</span>}
+                  </div>
+                )}
+              </div>
+              <button type="button" aria-label="create session" title="Create session" disabled={!setName.trim()} className="border-l border-zinc-200 px-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40" onClick={persistNamed}>Create</button>
+              <button type="button" aria-label="delete session" title="Delete session" disabled={!selectedSetId} className="border-l border-zinc-200 px-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-30" onClick={() => {
+                if (!selectedSetId) return
+                setSets(deleteSet(localSetStore, selectedSetId))
+                setSelectedSetId('')
+                setSetName('')
+              }}>Delete</button>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-3 px-4 py-4 pb-16 lg:grid-cols-2 sm:px-6">
+      <main className="mx-auto grid max-w-6xl grid-cols-1 gap-5 px-5 py-6 pb-20 sm:px-8 sm:py-8 lg:grid-cols-2">
         {state.rows.map((row, index) => {
           const native = NATIVE[row.type]
           return (
@@ -180,7 +251,8 @@ export default function App() {
                   aria-label="data"
                   rows={2}
                   placeholder="Payload"
-                  className="h-14 w-full resize-none rounded-md border border-zinc-300 px-2 py-1 font-mono text-xs outline-none focus:border-zinc-500"
+                  className="h-14 w-full resize-none rounded-md border border-zinc-300 px-2 py-1 font-mono leading-3 outline-none focus:border-zinc-500"
+                  style={{ fontSize: '12px', lineHeight: '15px' }}
                   value={row.data}
                   onChange={(e) =>
                     apply({ type: 'CHANGE_DATA', id: row.id, data: e.target.value })
@@ -191,7 +263,7 @@ export default function App() {
                   <button
                     type="button"
                     disabled={busy}
-                    className="rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs font-medium hover:bg-zinc-50 disabled:opacity-50"
+                    className="ui-generate w-full rounded-md border border-zinc-300 bg-white px-2 py-0.5 text-xs font-medium hover:bg-zinc-50 disabled:opacity-50"
                     onClick={() => apply({ type: 'GENERATE_ONE', id: row.id })}
                   >
                     Generate
@@ -209,7 +281,7 @@ export default function App() {
                     }`}
                 >
                   <span
-                    className="absolute top-1.5 left-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-zinc-200 bg-white/90 font-mono text-xs font-semibold tabular-nums text-zinc-800 shadow-sm"
+                    className="absolute top-1.5 left-1.5 z-10 flex h-7 w-7 items-center justify-center rounded-md border border-zinc-900 bg-white font-mono text-xs font-semibold tabular-nums text-zinc-900 shadow-sm"
                     title={`Scan ${index + 1} of ${state.rows.length}`}
                   >
                     {index + 1}
@@ -257,7 +329,7 @@ export default function App() {
         <button
           type="button"
           tabIndex={-1}
-          className="group flex min-h-[7.75rem] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-zinc-300 bg-white/70 p-2 text-zinc-500 transition hover:border-zinc-400 hover:bg-white hover:text-zinc-800 hover:shadow-sm"
+          className="ui-add group flex min-h-[7.75rem] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-zinc-300 bg-white/70 p-2 text-zinc-500 transition hover:border-zinc-400 hover:bg-white hover:text-zinc-800 hover:shadow-sm"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => apply({ type: 'ADD_ROW' })}
         >
