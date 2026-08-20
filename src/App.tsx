@@ -92,50 +92,37 @@ export default function App() {
     }
   }
 
-  async function exportSession() {
+  function exportSession() {
     const data = JSON.stringify(state, null, 2)
     const blob = new Blob([data], { type: 'application/json' })
-
-    const saveFilePicker = (window as Window & {
-      showSaveFilePicker?: (options: {
-        suggestedName: string
-        types: { description: string; accept: Record<string, string[]> }[]
-      }) => Promise<{ createWritable: () => Promise<FileSystemWritableFileStream> }>
-    }).showSaveFilePicker
-
-    if (saveFilePicker) {
-      try {
-        const handle = await saveFilePicker({
-          suggestedName: 'code-label-session.json',
-          types: [{ description: 'JSON session', accept: { 'application/json': ['.json'] } }],
-        })
-        const writable = await handle.createWritable()
-        await writable.write(blob)
-        await writable.close()
-      } catch (error) {
-        if ((error as DOMException).name !== 'AbortError') throw error
-      }
-      return
-    }
-
-    const name = window.prompt('Export file name', 'code-label-session.json')
-    if (!name) return
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = name.endsWith('.json') ? name : `${name}.json`
+    link.download = `code-label-session-${stamp}.json`
+    document.body.appendChild(link)
     link.click()
+    document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
 
   function importSession(file: File) {
     void file.text().then((contents) => {
       const imported = JSON.parse(contents) as SessionState
-      if (!Array.isArray(imported.rows) || !imported.rows.length) throw new Error('Invalid session')
+      const validType = (t: unknown) => TYPES.some((opt) => opt.value === t)
+      if (
+        !Array.isArray(imported.rows) ||
+        !imported.rows.length ||
+        imported.rows.some((r) =>
+          !r || typeof r.data !== 'string' ||
+          !validType(r.type) ||
+          typeof r.id !== 'string'
+        )
+      ) throw new Error('Invalid session')
       setState(imported)
       setSelectedSetId('')
       setSetName('')
-    }).catch(() => window.alert('That file does not contain a valid session.'))
+    }).catch(() => alert('That file does not contain a valid session.'))
   }
 
   return (
