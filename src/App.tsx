@@ -203,7 +203,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <button type="button" aria-label="create session" title="Create session" className="border-l border-zinc-200 px-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40" onClick={persistNamed}>Create</button>
+              <button type="button" aria-label="create session" title="Create session" className="border-l border-zinc-200 px-2.5 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-40" onClick={persistNamed}>Save</button>
               <button type="button" aria-label="delete session" title="Delete session" disabled={!selectedSetId} className="border-l border-zinc-200 px-2.5 text-sm text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-30" onClick={() => {
                 if (!selectedSetId) return
                 setSets(deleteSet(localSetStore, selectedSetId))
